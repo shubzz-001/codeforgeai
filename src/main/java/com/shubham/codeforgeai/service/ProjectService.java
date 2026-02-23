@@ -1,7 +1,9 @@
 package com.shubham.codeforgeai.service;
 
+import com.shubham.codeforgeai.model.CodeFile;
 import com.shubham.codeforgeai.model.Project;
 import com.shubham.codeforgeai.model.User;
+import com.shubham.codeforgeai.repository.CodeFileRepository;
 import com.shubham.codeforgeai.repository.ProjectRepository;
 import com.shubham.codeforgeai.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -12,10 +14,11 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
+
 import java.util.UUID;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -26,10 +29,11 @@ public class ProjectService {
 
     private final ProjectRepository projectRepository;
     private final UserRepository userRepository;
+    private final CodeFileRepository codeFileRepository;
 
     private final String UPLOAD_DIR = "uploads/";
 
-    public void uploadProject(MultipartFile file, String name, String description, String email) {
+    public void uploadProject(MultipartFile file, String name, String description, String email) throws IOException {
 
         if (file.isEmpty()) {
             throw new RuntimeException("File is empty");
@@ -63,6 +67,9 @@ public class ProjectService {
         project.setOriginalFileName(file.getOriginalFilename());
         project.setStoragePath(projectPath.toString());
         project.setUser(user);
+
+        projectRepository.save(project);
+        scanAndStoreJavaFiles(projectPath, project);
     }
 
     private void unzip(String zipFilePath, String destDir) throws IOException {
@@ -88,4 +95,31 @@ public class ProjectService {
             }
         }
     }
+
+    private void scanAndStoreJavaFiles(Path projectPath, Project project) throws IOException {
+
+        Files.walk(projectPath)
+                .filter(path -> path.toString().endsWith(".java"))
+                .forEach(path -> {
+
+                    try {
+                        String content = Files.readString(path);
+                        int lines = content.split("\r\n|\r|\n").length;
+
+                        CodeFile codeFile = new CodeFile();
+                        codeFile.setFileName(path.getFileName().toString());
+                        codeFile.setFilePath(path.toString());
+                        codeFile.setContent(content);
+                        codeFile.setLineCount(lines);
+                        codeFile.setProject(project);
+
+                        codeFileRepository.save(codeFile);
+
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                });
+
+    }
+
 }
