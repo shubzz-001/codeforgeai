@@ -41,13 +41,14 @@ public class AuthController {
         user.setName(request.getName());
         user.setEmail(request.getEmail());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
-        user.setRole(request.getRole() != null ? request.getRole() : Role.ROLE_USER);
+        user.setRole(Role.ROLE_USER);
 
         userRepository.save(user);
 
         return ResponseEntity.ok("User registered successfully");
     }
 
+    @PostMapping("/login")
     public ResponseEntity<?> login(@Valid @RequestBody LoginRequest loginRequest) {
         User user = userRepository.findByEmail(loginRequest.getEmail())
                 .orElseThrow(() -> new RuntimeException(" Error : User not found"));

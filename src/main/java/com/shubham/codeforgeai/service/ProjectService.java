@@ -1,0 +1,91 @@
+package com.shubham.codeforgeai.service;
+
+import com.shubham.codeforgeai.model.Project;
+import com.shubham.codeforgeai.model.User;
+import com.shubham.codeforgeai.repository.ProjectRepository;
+import com.shubham.codeforgeai.repository.UserRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
+import java.util.UUID;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
+
+@Service
+@RequiredArgsConstructor
+public class ProjectService {
+
+    private final ProjectRepository projectRepository;
+    private final UserRepository userRepository;
+
+    private final String UPLOAD_DIR = "uploads/";
+
+    public void uploadProject(MultipartFile file, String name, String description, String email) {
+
+        if (file.isEmpty()) {
+            throw new RuntimeException("File is empty");
+        }
+
+        if (!file.getOriginalFilename().endsWith(".zip")) {
+            throw new RuntimeException("File is not zip !! Only zip are allowed.");
+        }
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(()  -> new RuntimeException("User not found"));
+
+        String uniqueFolder = UUID.randomUUID().toString();
+        Path projectPath = Paths.get(UPLOAD_DIR + uniqueFolder);
+
+        try {
+            Files.createDirectories(projectPath);
+
+            Path zipPath = projectPath.resolve(file.getOriginalFilename());
+            Files.copy(file.getInputStream(), zipPath);
+
+            unzip(zipPath.toString(), projectPath.toString());
+
+        } catch (IOException e) {
+            throw new RuntimeException("File Upload Failed");
+        }
+
+        Project project = new Project();
+        project.setName(name);
+        project.setDescription(description);
+        project.setOriginalFileName(file.getOriginalFilename());
+        project.setStoragePath(projectPath.toString());
+        project.setUser(user);
+    }
+
+    private void unzip(String zipFilePath, String destDir) throws IOException {
+
+        try (ZipInputStream zis = new ZipInputStream(new FileInputStream(zipFilePath))) {
+            ZipEntry entry;
+
+            while ((entry = zis.getNextEntry()) != null) {
+                File newFile = new File(destDir + entry.getName());
+
+                if (entry.isDirectory()) {
+                    newFile.mkdirs();
+                } else {
+                    new File(newFile.getParent()).mkdirs();
+                    try (FileOutputStream fos = new FileOutputStream(newFile)) {
+                        byte[] buffer = new byte[1024];
+                        int len;
+                        while ((len = zis.read(buffer)) > 0) {
+                            fos.write(buffer, 0, len);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
