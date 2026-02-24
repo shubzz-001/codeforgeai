@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.security.Principal;
 
 @RestController
@@ -24,7 +25,7 @@ public class ProjectController {
             @RequestParam("name") String name,
             @RequestParam("description") String description,
             Principal principal
-    ) {
+    ) throws IOException {
         projectService.uploadProject(file, name,description, principal.getName());
         return ResponseEntity.ok("Project uploaded Successfully");
     }

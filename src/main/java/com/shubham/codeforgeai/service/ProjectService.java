@@ -49,6 +49,7 @@ public class ProjectService {
         String uniqueFolder = UUID.randomUUID().toString();
         Path projectPath = Paths.get(UPLOAD_DIR + uniqueFolder);
 
+        System.out.println("Scanning Path: " + projectPath.toAbsolutePath());
         try {
             Files.createDirectories(projectPath);
 
@@ -68,8 +69,8 @@ public class ProjectService {
         project.setStoragePath(projectPath.toString());
         project.setUser(user);
 
-        projectRepository.save(project);
-        scanAndStoreJavaFiles(projectPath, project);
+        Project savedProject = projectRepository.save(project);
+        scanAndStoreJavaFiles(projectPath, savedProject);
     }
 
     private void unzip(String zipFilePath, String destDir) throws IOException {
@@ -78,7 +79,8 @@ public class ProjectService {
             ZipEntry entry;
 
             while ((entry = zis.getNextEntry()) != null) {
-                File newFile = new File(destDir + entry.getName());
+                Path newPath = Paths.get(destDir).resolve(entry.getName()).normalize();
+                File newFile = newPath.toFile();
 
                 if (entry.isDirectory()) {
                     newFile.mkdirs();
@@ -98,10 +100,12 @@ public class ProjectService {
 
     private void scanAndStoreJavaFiles(Path projectPath, Project project) throws IOException {
 
+        System.out.println("Scanning Java Files");
         Files.walk(projectPath)
                 .filter(path -> path.toString().endsWith(".java"))
                 .forEach(path -> {
 
+                    System.out.println("Found "+path);
                     try {
                         String content = Files.readString(path);
                         int lines = content.split("\r\n|\r|\n").length;
