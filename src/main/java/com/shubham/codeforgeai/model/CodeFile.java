@@ -24,6 +24,12 @@ public class CodeFile {
 
     private int lineCount;
 
+    private long methodCount;
+
+    private long classCount;
+
+    private long complexityScore;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "project_id", nullable = false)
     private Project project;

@@ -110,11 +110,31 @@ public class ProjectService {
                         String content = Files.readString(path);
                         int lines = content.split("\r\n|\r|\n").length;
 
+                        long methodCount = content.lines()
+                                .filter(line -> line.trim().matches(".*\\b(public|private|protected)\\b.*\\(.*\\).*\\{?"))
+                                .count();
+
+                        long classCount = content.lines()
+                                .filter(line -> line.contains("class "))
+                                .count();
+
+                        long complexity = content.lines()
+                                .filter( line -> line.contains("if") ||
+                                        line.contains("for") ||
+                                        line.contains("while") ||
+                                        line.contains("case") ||
+                                        line.contains("&&") ||
+                                        line.contains("||"))
+                                .count();
+
                         CodeFile codeFile = new CodeFile();
                         codeFile.setFileName(path.getFileName().toString());
                         codeFile.setFilePath(path.toString());
                         codeFile.setContent(content);
                         codeFile.setLineCount(lines);
+                        codeFile.setMethodCount(methodCount);
+                        codeFile.setClassCount(classCount);
+                        codeFile.setComplexityScore(complexity);
                         codeFile.setProject(project);
 
                         codeFileRepository.save(codeFile);
