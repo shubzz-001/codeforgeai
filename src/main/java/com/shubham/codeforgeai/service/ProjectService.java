@@ -19,6 +19,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
+import java.util.List;
 import java.util.UUID;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -44,7 +45,7 @@ public class ProjectService {
         }
 
         User user = userRepository.findByEmail(email)
-                .orElseThrow(()  -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new RuntimeException("User not found"));
 
         String uniqueFolder = UUID.randomUUID().toString();
         Path projectPath = Paths.get(UPLOAD_DIR + uniqueFolder);
@@ -70,7 +71,9 @@ public class ProjectService {
         project.setUser(user);
 
         Project savedProject = projectRepository.save(project);
+
         scanAndStoreJavaFiles(projectPath, savedProject);
+        calculateProjectMetrics(savedProject);
     }
 
     private void unzip(String zipFilePath, String destDir) throws IOException {
@@ -105,27 +108,27 @@ public class ProjectService {
                 .filter(path -> path.toString().endsWith(".java"))
                 .forEach(path -> {
 
-                    System.out.println("Found "+path);
+                    System.out.println("Found " + path);
                     try {
                         String content = Files.readString(path);
                         int lines = content.split("\r\n|\r|\n").length;
 
-                        long methodCount = content.lines()
+                        int methodCount = Math.toIntExact(content.lines()
                                 .filter(line -> line.trim().matches(".*\\b(public|private|protected)\\b.*\\(.*\\).*\\{?"))
-                                .count();
+                                .count());
 
-                        long classCount = content.lines()
+                        int classCount = Math.toIntExact(content.lines()
                                 .filter(line -> line.contains("class "))
-                                .count();
+                                .count());
 
-                        long complexity = content.lines()
-                                .filter( line -> line.contains("if") ||
+                        int complexity = Math.toIntExact(content.lines()
+                                .filter(line -> line.contains("if") ||
                                         line.contains("for") ||
                                         line.contains("while") ||
                                         line.contains("case") ||
                                         line.contains("&&") ||
                                         line.contains("||"))
-                                .count();
+                                .count());
 
                         CodeFile codeFile = new CodeFile();
                         codeFile.setFileName(path.getFileName().toString());
@@ -146,4 +149,44 @@ public class ProjectService {
 
     }
 
+    private void calculateProjectMetrics(Project project) {
+
+        List<CodeFile> files = codeFileRepository.findByProject(project);
+        int totalLines = files.stream().mapToInt(CodeFile::getLineCount).sum();
+        int totalMethods = files.stream().mapToInt(CodeFile::getMethodCount).sum();
+        int totalClasses = files.stream().mapToInt(CodeFile::getClassCount).sum();
+        int totalComplexity = files.stream().mapToInt(CodeFile::getComplexityScore).sum();
+
+        double avgComplexity = files.isEmpty() ? 0 : (double) totalComplexity / files.size();
+
+        double qualityScore = calculateQualityScore(
+                totalLines,
+                totalMethods,
+                totalComplexity,
+                avgComplexity
+        );
+
+        project.setTotalLines(totalLines);
+        project.setTotalMethods(totalMethods);
+        project.setTotalClasses(totalClasses);
+        project.setTotalComplexity(totalComplexity);
+        project.setQualityScore(qualityScore);
+
+        projectRepository.save(project);
+    }
+
+    private double calculateQualityScore(
+            int totalLines,
+            int totalMethods,
+            int totalComplexity,
+            double avgComplexity
+    ) {
+        double score = 100;
+
+        if (avgComplexity > 10) score -= 20;
+        if (totalComplexity > 50) score -= 15;
+        if (totalMethods == 0) score -= 10;
+
+        return Math.max(score, 0);
+    }
 }

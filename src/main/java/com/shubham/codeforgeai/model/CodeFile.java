@@ -24,11 +24,11 @@ public class CodeFile {
 
     private int lineCount;
 
-    private long methodCount;
+    private int methodCount;
 
-    private long classCount;
+    private int classCount;
 
-    private long complexityScore;
+    private int complexityScore;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "project_id", nullable = false)

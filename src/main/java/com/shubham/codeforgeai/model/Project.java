@@ -24,6 +24,12 @@ public class Project {
     private String originalFileName;
     private String storagePath;
 
+    private int totalLines;
+    private int totalMethods;
+    private int totalClasses;
+    private int totalComplexity;
+    private double qualityScore;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
