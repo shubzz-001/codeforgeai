@@ -1,5 +1,6 @@
 package com.shubham.codeforgeai.service;
 
+import com.shubham.codeforgeai.ai.AiService;
 import com.shubham.codeforgeai.model.CodeFile;
 import com.shubham.codeforgeai.model.Project;
 import com.shubham.codeforgeai.model.User;
@@ -27,6 +28,8 @@ import java.util.zip.ZipInputStream;
 @Service
 @RequiredArgsConstructor
 public class ProjectService {
+
+    private final AiService aiService;
 
     private final ProjectRepository projectRepository;
     private final UserRepository userRepository;
@@ -73,6 +76,13 @@ public class ProjectService {
         Project savedProject = projectRepository.save(project);
 
         scanAndStoreJavaFiles(projectPath, savedProject);
+
+        List<CodeFile> files = codeFileRepository.findByProject(savedProject);
+        if (!files.isEmpty()) {
+            String explanation = aiService.explainCode(files.get(0).getContent());
+            System.out.println("AI explanation: " + explanation);
+        }
+
         calculateProjectMetrics(savedProject);
     }
 
