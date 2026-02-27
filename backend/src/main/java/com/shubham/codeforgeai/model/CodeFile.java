@@ -30,6 +30,12 @@ public class CodeFile {
 
     private int complexityScore;
 
+    @Column(columnDefinition = "TEXT")
+    private String aiSummary;
+
+    @Column(columnDefinition = "TEXT")
+    private String aiSuggestion;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "project_id", nullable = false)
     private Project project;

@@ -21,6 +21,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -76,12 +77,6 @@ public class ProjectService {
         Project savedProject = projectRepository.save(project);
 
         scanAndStoreJavaFiles(projectPath, savedProject);
-
-        List<CodeFile> files = codeFileRepository.findByProject(savedProject);
-        if (!files.isEmpty()) {
-            String explanation = aiService.explainCode(files.get(0).getContent());
-            System.out.println("AI explanation: " + explanation);
-        }
 
         calculateProjectMetrics(savedProject);
     }
@@ -149,6 +144,11 @@ public class ProjectService {
                         codeFile.setClassCount(classCount);
                         codeFile.setComplexityScore(complexity);
                         codeFile.setProject(project);
+
+                        Map response = aiService.analyzeCode(content);
+
+                        codeFile.setAiSummary(response.get("summary").toString());
+                        codeFile.setAiSuggestion(response.get("suggestion").toString());
 
                         codeFileRepository.save(codeFile);
 

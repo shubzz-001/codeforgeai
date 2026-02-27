@@ -13,16 +13,14 @@ public class AiService {
 
     private final RestTemplate restTemplate;
 
-    private final String AI_URL = "http://localhost:8000/explain";
+    private final String AI_URL = "http://localhost:8000/analyze";
 
-    public String explainCode(String code) {
+    public Map analyzeCode(String code) {
 
         Map<String, String> request = new HashMap<>();
         request.put("code", code);
 
-        Map response = restTemplate.postForObject(AI_URL, request, Map.class);
-
-        return response.get("explanation").toString();
+        return restTemplate.postForObject(AI_URL, request, Map.class);
     }
 
 }
