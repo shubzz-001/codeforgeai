@@ -13,12 +13,8 @@ target/
 .springBeans
 .sts4-cache
 
-
 ### IntelliJ IDEA ###
 .idea
-backend/.idea
-backend/*.iws
-backend/*.iml
 *.iws
 *.iml
 *.ipr
@@ -37,10 +33,4 @@ build/
 .vscode/
 
 ### Application Properties file ###
-baackend/src/main/resources/application-local.properties
-
-backend/target/
-backend/uploads/
-
-ai-service/__pycache__/
-ai-service/venv/
+/src/main/resources/application-local.properties

@@ -8,7 +8,7 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 
 @Repository
-public interface CodeFileRepository extends JpaRepository<CodeFile, Long> {
+public interface CodeFileRepository extends JpaRepository<CodeFile, Integer> {
 
     List<CodeFile> findByProject(Project project);
 
