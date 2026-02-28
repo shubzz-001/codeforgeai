@@ -1,6 +1,8 @@
 package com.shubham.codeforgeai.service;
 
 import com.shubham.codeforgeai.ai.AiService;
+import com.shubham.codeforgeai.dto.CodeFileDTO;
+import com.shubham.codeforgeai.dto.ProjectSummaryDTO;
 import com.shubham.codeforgeai.model.CodeFile;
 import com.shubham.codeforgeai.model.Project;
 import com.shubham.codeforgeai.model.User;
@@ -20,6 +22,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -198,5 +201,43 @@ public class ProjectService {
         if (totalMethods == 0) score -= 10;
 
         return Math.max(score, 0);
+    }
+
+    public List<ProjectSummaryDTO> getProjectsByUser(String name) {
+        List<Project> projects = projectRepository.findByUserEmail(name);
+        List<ProjectSummaryDTO> projectSummaries = new ArrayList<>();
+
+        for (Project project : projects) {
+            ProjectSummaryDTO summaryDTO = new ProjectSummaryDTO(
+                    project.getId(),
+                    project.getName(),
+                    project.getTotalLines(),
+                    project.getTotalMethods(),
+                    project.getTotalComplexity(),
+                    project.getQualityScore()
+            );
+            projectSummaries.add(summaryDTO);
+        }
+        return projectSummaries;
+    }
+
+    public List<CodeFileDTO> getFiles(Long projectId) {
+        List<CodeFile> files = codeFileRepository.findByProjectId(projectId);
+        List<CodeFileDTO> codeFileDTOList = new ArrayList<>();
+
+        for (CodeFile codeFile : files) {
+            CodeFileDTO codeFileDTO = new CodeFileDTO(
+                    codeFile.getId(),
+                    codeFile.getFileName(),
+                    codeFile.getLineCount(),
+                    codeFile.getMethodCount(),
+                    codeFile.getComplexityScore(),
+                    codeFile.getAiSummary(),
+                    codeFile.getAiSuggestion()
+            );
+            codeFileDTOList.add(codeFileDTO);
+        }
+
+        return codeFileDTOList;
     }
 }

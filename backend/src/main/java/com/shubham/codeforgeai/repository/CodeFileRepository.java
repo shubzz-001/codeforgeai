@@ -11,5 +11,6 @@ import java.util.List;
 public interface CodeFileRepository extends JpaRepository<CodeFile, Integer> {
 
     List<CodeFile> findByProject(Project project);
+    List<CodeFile> findByProjectId(Long projectId);
 
 }

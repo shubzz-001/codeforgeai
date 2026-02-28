@@ -3,10 +3,7 @@ package com.shubham.codeforgeai.controller;
 import com.shubham.codeforgeai.service.ProjectService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -29,4 +26,19 @@ public class ProjectController {
         projectService.uploadProject(file, name,description, principal.getName());
         return ResponseEntity.ok("Project uploaded Successfully");
     }
+
+    @GetMapping("/")
+    public ResponseEntity<?> getUserProjects(Principal principal) {
+        return ResponseEntity.ok(
+                projectService.getProjectsByUser(principal.getName())
+        );
+    }
+
+    @GetMapping("/{projectId}/files")
+    public ResponseEntity<?> getFiles(@PathVariable Long projectId) {
+        return ResponseEntity.ok(
+                projectService.getFiles(projectId)
+        );
+    }
+
 }

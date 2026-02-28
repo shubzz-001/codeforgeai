@@ -15,7 +15,7 @@ def analyze_code(request: CodeRequest) :
     code = request.code
 
     class_count = len(re.findall(r'\bclass\b', code))
-    method_count = len(re.findall(r"\b(public|private|protected)\b.*\()", code))
+    method_count = len(re.findall(r"\b(public|private|protected)\b.*\(", code))
     if_count = len(re.findall(r'\bif\b', code))
     loop_count = len(re.findall(r'\b(for|while|do)\b', code))
 
