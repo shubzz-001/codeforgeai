@@ -203,8 +203,8 @@ public class ProjectService {
         return Math.max(score, 0);
     }
 
-    public List<ProjectSummaryDTO> getProjectsByUser(String name) {
-        List<Project> projects = projectRepository.findByUserEmail(name);
+    public List<ProjectSummaryDTO> getProjectsByUser(String email) {
+        List<Project> projects = projectRepository.findByUserEmail(email);
         List<ProjectSummaryDTO> projectSummaries = new ArrayList<>();
 
         for (Project project : projects) {
