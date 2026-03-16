@@ -241,8 +241,17 @@ public class ProjectService {
         return codeFileDTOList;
     }
 
-    public CodeFile getFileContent(Integer fileId) {
-        return codeFileRepository.findById(fileId)
+    public CodeFileDTO getFileContent(Integer fileId) {
+        CodeFile codeFile = codeFileRepository.findById(fileId)
                 .orElseThrow(() -> new RuntimeException("File not found"));
+        return new CodeFileDTO(
+                codeFile.getId(),
+                codeFile.getFileName(),
+                codeFile.getLineCount(),
+                codeFile.getMethodCount(),
+                codeFile.getComplexityScore(),
+                codeFile.getAiSummary(),
+                codeFile.getAiSuggestion()
+        );
     }
 }
