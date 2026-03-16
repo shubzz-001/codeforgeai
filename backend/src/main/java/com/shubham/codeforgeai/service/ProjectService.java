@@ -240,4 +240,9 @@ public class ProjectService {
 
         return codeFileDTOList;
     }
+
+    public CodeFile getFileContent(Integer fileId) {
+        return codeFileRepository.findById(fileId)
+                .orElseThrow(() -> new RuntimeException("File not found"));
+    }
 }

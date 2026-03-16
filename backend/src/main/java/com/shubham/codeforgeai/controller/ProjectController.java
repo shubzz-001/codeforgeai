@@ -41,4 +41,9 @@ public class ProjectController {
         );
     }
 
+    @GetMapping("/files/{fileId}")
+    public ResponseEntity<?> getFileContent(@PathVariable Integer fileId) {
+        return ResponseEntity.ok(projectService.getFileContent(fileId));
+    }
+
 }
