@@ -12,11 +12,19 @@ function Navbar() {
   };
 
   return (
-    <div style={{ padding: "10px", background: "#222", color: "white" }}>
-      <span>CodeForge AI</span>
-      <button style={{ float: "right" }} onClick={handleLogout}>
+    <div className="bg-black px-6 py-4 flex justify-between items-center shadow">
+
+      <h1 className="text-xl font-bold text-blue-400">
+        CodeForge AI
+      </h1>
+
+      <button
+        className="bg-red-500 px-3 py-1 rounded hover:bg-red-400"
+        onClick={handleLogout}
+      >
         Logout
       </button>
+
     </div>
   );
 }

@@ -1,22 +1,22 @@
-import { useNavigate } from "react-router-dom";
+// import { useNavigate } from "react-router-dom";
 
 function ProjectCard({ project }) {
-  const navigate = useNavigate();
+  // const navigate = useNavigate();
 
   return (
-    <div
-      style={{
-        border: "1px solid #ccc",
-        padding: "10px",
-        margin: "10px",
-        cursor: "pointer",
-      }}
-      onClick={() => navigate(`/projects/${project.id}`)}
-    >
-      <h3>{project.name}</h3>
-      <p>Total Lines: {project.totalLines}</p>
-      <p>Complexity: {project.totalComplexity}</p>
-      <p>Quality Score: {project.qualityScore}</p>
+    <div className="bg-gray-800 p-5 rounded-lg shadow hover:scale-105 transition cursor-pointer">
+
+      <h3 className="text-xl font-semibold mb-2">
+        {project.name}
+      </h3>
+
+      <p className="text-gray-400">Lines: {project.totalLines}</p>
+      <p className="text-gray-400">Complexity: {project.totalComplexity}</p>
+
+      <p className="mt-2 text-green-400 font-bold">
+        Score: {project.qualityScore}
+      </p>
+
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import api from "../api/axios";
+import Editor from "@monaco-editor/react";
 
 function FileCard({ file }) {
   const [code, setCode] = useState("");
@@ -10,24 +11,44 @@ function FileCard({ file }) {
   };
 
   return (
-    <div style={{ border: "1px solid gray", padding: "10px", margin: "10px" }}>
-      <h4 onClick={loadCode} style={{ cursor: "pointer" }}>
-        {file.fileName}
-      </h4>
+    <div className="bg-gray-800 p-4 rounded-lg mb-4 shadow">
 
+    <h4
+      onClick={loadCode}
+      className="text-blue-400 cursor-pointer font-semibold"
+    >
+      {file.fileName}
+    </h4>
+
+    <div className="text-sm text-gray-400 mt-2">
       <p>Lines: {file.lineCount}</p>
       <p>Methods: {file.methodCount}</p>
       <p>Complexity: {file.complexityScore}</p>
-
-      <p><strong>AI Summary:</strong> {file.aiSummary}</p>
-      <p><strong>Suggestion:</strong> {file.aiSuggestion}</p>
-
-      {code && (
-        <pre style={{ background: "#eee", padding: "10px" }}>
-          {code}
-        </pre>
-      )}
     </div>
+
+    <div className="mt-3">
+      <p className="text-green-300">
+        <b>AI Summary:</b> {file.aiSummary}
+      </p>
+
+      <p className="text-yellow-300">
+        <b>Suggestion:</b> {file.aiSuggestion}
+      </p>
+    </div>
+
+    {code && (
+      <div className="mt-4 border border-gray-700 rounded">
+        <Editor
+          height="400px"
+          defaultLanguage="java"
+          theme="vs-dark"
+          value={code}
+          options={{ readOnly: true }}
+        />
+      </div>
+    )}
+
+  </div>
   );
 }
 
