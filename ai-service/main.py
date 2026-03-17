@@ -1,9 +1,15 @@
+import os
 from fastapi import FastAPI
 from pydantic import BaseModel
+from openai import OpenAI
+from dotenv import load_dotenv
 import re
+
+load_dotenv()
 
 app = FastAPI()
 
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 class CodeRequest(BaseModel):
     code: str
 
@@ -12,28 +18,32 @@ def analyze_code(request: CodeRequest) :
     '''
     This endpoint takes a Java code snippet and returns an analysis of its structure.
     '''
-    code = request.code
+    code = request.code[:4000]
 
-    class_count = len(re.findall(r'\bclass\b', code))
-    method_count = len(re.findall(r"\b(public|private|protected)\b.*\(", code))
-    if_count = len(re.findall(r'\bif\b', code))
-    loop_count = len(re.findall(r'\b(for|while|do)\b', code))
+    promt = f"""
+    You are a senior Software Engineer.
 
-    issues = []
+    Analyze the following Java code and provide:
+    1. A summary of the code structure (number of classes, methods, etc.)
+    2. Potential issues or code smells (e.g., high complexity, too many methods, etc.)
+    3. Refactoring suggestions to improve code quality.
 
-    if if_count + loop_count > 10:
-        issues.append("High decision complexity detected")
+    Code:
+    {code}
+    """
 
-    if method_count > 20:
-        issues.append("Too many methods in the file")
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": "You are a Expert code reviewer."},
+            {"role": "user", "content": promt}
+        ]
+    )
 
-    if len(code.splitlines()) > 300:
-        issues.append("File is too long, consider splitting")
-
-    suggestion = "Consider breaking large methods into smaller reusable components"
+    result = response.choices[0].message.content
 
     return {
-        "summary": f"This file contains {class_count} class(es) and {method_count} method(s).",
-        "issues": issues,
-        "suggestion": suggestion
+        "summary": result,
+        "issues": [],
+        "suggestion": result
     }

@@ -44,3 +44,4 @@ backend/uploads/
 
 ai-service/__pycache__/
 ai-service/venv/
+ai-service/.env
