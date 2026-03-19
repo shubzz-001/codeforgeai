@@ -8,7 +8,7 @@ export default function Navbar() {
   const location  = useLocation();
   const [open, setOpen] = useState(false);
 
-  const initials = user?.username?.slice(0,2).toUpperCase()
+  const initials = ( user?.name || user?.username )?.slice(0,2).toUpperCase()
     ?? user?.email?.slice(0,2).toUpperCase()
     ?? 'U';
 
@@ -73,7 +73,7 @@ export default function Navbar() {
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 10, fontWeight: 700, color: '#fff',
             }}>{initials}</div>
-            <span>{user?.username ?? user?.email?.split('@')[0] ?? 'user'}</span>
+            <span>{user?.name || user?.username || user?.email?.split('@')[0] || 'user'}</span>
             <span style={{ color: 'var(--text-muted)', fontSize: 10 }}>▾</span>
           </button>
 
@@ -86,7 +86,7 @@ export default function Navbar() {
               animation: 'fadeIn 150ms ease',
             }}>
               <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border-subtle)' }}>
-                <div style={{ fontSize: 12, color: 'var(--text-primary)', fontWeight: 600 }}>{user?.username}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-primary)', fontWeight: 600 }}>{user?.name || user?.username}</div>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{user?.email}</div>
               </div>
               <button

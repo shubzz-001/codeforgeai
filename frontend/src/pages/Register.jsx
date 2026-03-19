@@ -5,11 +5,13 @@ import { useAuth } from '../context/AuthContext';
 export default function Register() {
   const { register, user } = useAuth();
   const navigate = useNavigate();
-  const [form,    setForm]    = useState({ username:'', email:'', password:'', confirm:'' });
+
+  const [form,    setForm]    = useState({ name:'', email:'', password:'', confirm:'' });
   const [error,   setError]   = useState('');
+  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Navigate reactively when user state becomes truthy
+  // If backend auto-logged us in (returned a token), go to dashboard
   useEffect(() => {
     if (user) navigate('/dashboard', { replace: true });
   }, [user, navigate]);
@@ -18,13 +20,20 @@ export default function Register() {
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (form.password !== form.confirm) { setError('Passwords do not match.'); return; }
-    if (form.password.length < 8) { setError('Password must be at least 8 characters.'); return; }
+    if (!form.name.trim())             { setError('Name is required.');                       return; }
+    if (form.password !== form.confirm) { setError('Passwords do not match.');                return; }
+    if (form.password.length < 8)      { setError('Password must be at least 8 characters.'); return; }
     setError('');
+    setSuccess('');
     setLoading(true);
     try {
-      await register(form.username, form.email, form.password);
-      // navigate handled by useEffect above
+      const result = await register(form.name, form.email, form.password);
+      if (!result.autoLogin) {
+        // Backend registered OK but didn't return a token — redirect to login
+        setSuccess('Account created! Redirecting to sign in…');
+        setTimeout(() => navigate('/login', { replace: true }), 1800);
+      }
+      // if autoLogin === true, the useEffect above handles the redirect
     } catch (err) {
       setError(err?.message || 'Registration failed. Please try again.');
     } finally {
@@ -42,6 +51,7 @@ export default function Register() {
         <div style={{ height:3, background:'linear-gradient(90deg, var(--accent-green), var(--accent-cyan), var(--accent-primary))' }} />
 
         <div style={{ padding:'36px 36px 28px' }}>
+          {/* Logo */}
           <div style={{ textAlign:'center', marginBottom:28 }}>
             <div style={{ display:'inline-flex', alignItems:'center', gap:10, marginBottom:8 }}>
               <svg width="30" height="30" viewBox="0 0 26 26" fill="none">
@@ -56,11 +66,13 @@ export default function Register() {
                 CodeForge<span style={{ color:'var(--accent-primary)' }}>AI</span>
               </span>
             </div>
-            <p style={{ fontFamily:'var(--font-mono)', fontSize:11, color:'var(--text-muted)', letterSpacing:'0.1em' }}>CREATE YOUR WORKSPACE</p>
+            <p style={{ fontFamily:'var(--font-mono)', fontSize:11, color:'var(--text-muted)', letterSpacing:'0.1em' }}>
+              CREATE YOUR WORKSPACE
+            </p>
           </div>
 
           <form onSubmit={handleSubmit} style={{ display:'flex', flexDirection:'column', gap:13 }}>
-            <Field label="USERNAME"  value={form.username} onChange={set('username')} placeholder="cooldev42" />
+            <Field label="FULL NAME" value={form.name} onChange={set('name')} placeholder="John Doe" />
             <Field label="EMAIL" type="email" value={form.email} onChange={set('email')} placeholder="you@example.com" />
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
               <Field label="PASSWORD" type="password" value={form.password} onChange={set('password')} placeholder="••••••••" />
@@ -73,8 +85,21 @@ export default function Register() {
               </div>
             )}
 
-            <button type="submit" disabled={loading} style={{ marginTop:4, padding:12, borderRadius:'var(--radius-md)', border:'none', background: loading ? 'var(--bg-overlay)' : 'var(--accent-primary)', color: loading ? 'var(--text-muted)' : '#000', fontFamily:'var(--font-mono)', fontWeight:700, fontSize:13, cursor: loading ? 'not-allowed' : 'pointer', letterSpacing:'0.06em', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
-              {loading ? <><Spinner /> CREATING…</> : 'CREATE WORKSPACE →'}
+            {success && (
+              <div style={{ padding:'10px 14px', borderRadius:'var(--radius-md)', background:'rgba(63,185,80,0.08)', border:'1px solid rgba(63,185,80,0.2)', fontFamily:'var(--font-mono)', fontSize:12, color:'var(--accent-green)', display:'flex', gap:8, alignItems:'center' }}>
+                ✓ {success}
+              </div>
+            )}
+
+            <button type="submit" disabled={loading || !!success} style={{
+              marginTop:4, padding:12, borderRadius:'var(--radius-md)', border:'none',
+              background: (loading || success) ? 'var(--bg-overlay)' : 'var(--accent-primary)',
+              color: (loading || success) ? 'var(--text-muted)' : '#000',
+              fontFamily:'var(--font-mono)', fontWeight:700, fontSize:13,
+              cursor: (loading || success) ? 'not-allowed' : 'pointer', letterSpacing:'0.06em',
+              display:'flex', alignItems:'center', justifyContent:'center', gap:8,
+            }}>
+              {loading ? <><Spinner /> CREATING…</> : success ? '✓ REDIRECTING…' : 'CREATE WORKSPACE →'}
             </button>
           </form>
 

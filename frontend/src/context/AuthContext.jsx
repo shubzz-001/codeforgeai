@@ -3,72 +3,82 @@ import api from '../api/axios';
 
 const AuthContext = createContext(null);
 
-function parseLoginResponse(data) {
-  const token =
-    data?.token ||
+function parseToken(data) {
+  return (
+    data?.token       ||
     data?.accessToken ||
     data?.access_token ||
-    data?.jwt ||
-    null;
+    data?.jwt         ||
+    null
+  );
+}
 
-  const user =
-    data?.user ||
-    data?.userDetails ||
-    data?.userData ||
-    (data?.id || data?.email || data?.username
-      ? { id: data.id, username: data.username, email: data.email, role: data.role }
-      : null);
-
-  return { token, user };
+function parseUser(data) {
+  const raw = data?.user || data?.userDetails || data?.userData || data;
+  if (!raw?.id && !raw?.email && !raw?.name && !raw?.username) return null;
+  return {
+    id:       raw.id,
+    name:     raw.name     || raw.username || '',
+    username: raw.username || raw.name     || '',
+    email:    raw.email    || '',
+    role:     raw.role     || '',
+  };
 }
 
 const savedToken = localStorage.getItem('codeforge_token');
 
 export function AuthProvider({ children }) {
-  const [user,    setUser]    = useState(null);
-  // If no token exists we are already done loading — no effect needed
-  const [loading, setLoading] = useState(!!savedToken);
+  const [user,             setUser]             = useState(null);
+  const [loading,          setLoading]          = useState(!!savedToken);
+  // null = not attempted, 'success' = registered OK but no token (must login)
+  const [registerSuccess,  setRegisterSuccess]  = useState(null);
   const initialized = useRef(false);
 
   useEffect(() => {
     if (initialized.current) return;
     initialized.current = true;
-
-    if (!savedToken) return; // loading already false, nothing to do
+    if (!savedToken) return;
 
     api.defaults.headers.common['Authorization'] = `Bearer ${savedToken}`;
     api.get('/auth/profile')
-      .then(res => {
-        const u = res.data?.user || res.data;
-        setUser(u);
-      })
+      .then(res => setUser(parseUser(res.data)))
       .catch(() => {
         localStorage.removeItem('codeforge_token');
         delete api.defaults.headers.common['Authorization'];
       })
-      .finally(() => setLoading(false)); // ← inside async callback, not effect body
+      .finally(() => setLoading(false));
   }, []);
 
   async function login(email, password) {
-    const res = await api.post('/auth/login', { email, password });
-    const { token, user: u } = parseLoginResponse(res.data);
-    if (!token) throw new Error('Server did not return a token. Check backend response shape.');
+    const res   = await api.post('/auth/login', { email, password });
+    const token = parseToken(res.data);
+    if (!token) throw new Error('Server did not return a token.');
     localStorage.setItem('codeforge_token', token);
     api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-    const resolvedUser = u || { email };
+    const resolvedUser = parseUser(res.data) || { email, name: email, username: email };
     setUser(resolvedUser);
     return resolvedUser;
   }
 
-  async function register(username, email, password) {
-    const res = await api.post('/auth/register', { username, email, password });
-    const { token, user: u } = parseLoginResponse(res.data);
-    if (!token) throw new Error('Server did not return a token. Check backend response shape.');
-    localStorage.setItem('codeforge_token', token);
-    api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-    const resolvedUser = u || { username, email };
-    setUser(resolvedUser);
-    return resolvedUser;
+  async function register(name, email, password) {
+    const res   = await api.post('/auth/register', { name, email, password });
+    const token = parseToken(res.data);
+
+    if (token) {
+      // Backend returned a token — log the user in directly
+      localStorage.setItem('codeforge_token', token);
+      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      const resolvedUser = parseUser(res.data) || { name, username: name, email };
+      setUser(resolvedUser);
+      return { autoLogin: true };
+    } else {
+      // Backend returned only a success message — user must log in manually
+      // (common Spring Security pattern: register → 200 OK, then login separately)
+      setRegisterSuccess(
+        res.data?.message || 'Account created! Please sign in.'
+      );
+      return { autoLogin: false };
+    }
   }
 
   function logout() {
@@ -78,7 +88,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, registerSuccess }}>
       {children}
     </AuthContext.Provider>
   );

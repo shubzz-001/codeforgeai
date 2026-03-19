@@ -1,15 +1,16 @@
 import os
 from fastapi import FastAPI
 from pydantic import BaseModel
-from openai import OpenAI
 from dotenv import load_dotenv
+import requests
 import re
 
 load_dotenv()
 
 app = FastAPI()
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+# client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+OPEN_ROUTER_API_KEY = os.getenv("OPEN_ROUTER_API_KEY")
 class CodeRequest(BaseModel):
     code: str
 
@@ -32,18 +33,24 @@ def analyze_code(request: CodeRequest) :
     {code}
     """
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": "You are a Expert code reviewer."},
-            {"role": "user", "content": promt}
-        ]
+    response = requests.post(
+        "https://openrouter.ai/api/v1/chat/completions",
+        headers={
+            "Authorization": f"Bearer {OPEN_ROUTER_API_KEY}",
+            "Content-Type": "application/json"
+        },
+        json={
+            "model" : "mistral-7b-instruct",
+            "messages": [
+                {"role": "user", "content": promt}
+            ]
+        }
     )
 
-    result = response.choices[0].message.content
+    result = response.json()
 
     return {
-        "summary": result,
+        "summary": result["choices"][0]["message"]["content"],
         "issues": [],
-        "suggestion": result
+        "suggestion": result["choices"][0]["message"]["content"]
     }

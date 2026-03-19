@@ -14,10 +14,10 @@ export default function Dashboard() {
   const [sortBy,    setSortBy]    = useState('createdAt');
   const [showForm,  setShowForm]  = useState(false);
 
-  // Form state — matches backend: file (single ZIP), name, description
+  // Upload form state
   const [formName,  setFormName]  = useState('');
   const [formDesc,  setFormDesc]  = useState('');
-  const [file,      setFile]      = useState(null);   // single file
+  const [file,      setFile]      = useState(null);
   const [uploading, setUploading] = useState(false);
   const [uploadErr, setUploadErr] = useState('');
   const [dragOver,  setDragOver]  = useState(false);
@@ -28,8 +28,22 @@ export default function Dashboard() {
   async function fetchProjects() {
     setLoading(true);
     try {
-      const data = await projectsApi.getAll();
-      setProjects(Array.isArray(data) ? data : []);
+      const projectList = await projectsApi.getAll();
+      const list = Array.isArray(projectList) ? projectList : [];
+
+      // For each project, fetch its files so ProjectCard can show real metrics.
+      // Run in parallel for speed.
+      const withFiles = await Promise.all(
+        list.map(async (p) => {
+          try {
+            const files = await projectsApi.getFiles(p.id);
+            return { ...p, files: Array.isArray(files) ? files : [] };
+          } catch {
+            return { ...p, files: [] };
+          }
+        })
+      );
+      setProjects(withFiles);
     } catch (err) {
       toast.error('Failed to load projects: ' + (err?.message || ''));
     } finally {
@@ -40,13 +54,12 @@ export default function Dashboard() {
   async function handleCreate(e) {
     e.preventDefault();
     if (!formName.trim()) { setUploadErr('Project name is required.'); return; }
-    if (!file)            { setUploadErr('Please select a ZIP file to upload.'); return; }
+    if (!file)            { setUploadErr('Please select a ZIP file.'); return; }
     setUploadErr('');
     setUploading(true);
     try {
-      // Backend @RequestParam: "file", "name", "description"
       const fd = new FormData();
-      fd.append('file', file);           // single file — matches @RequestParam("file")
+      fd.append('file', file);
       fd.append('name', formName);
       fd.append('description', formDesc);
       await projectsApi.create(fd);
@@ -69,11 +82,26 @@ export default function Dashboard() {
     if (dropped) setFile(dropped);
   }
 
+  // Derive complexity level from avg score for filtering
+  function complexityLevel(project) {
+    const files = project.files ?? [];
+    if (!files.length) return 'UNKNOWN';
+    const avg = files.reduce((s, f) => s + (f.complexityScore || 0), 0) / files.length;
+    if (avg <= 25) return 'LOW';
+    if (avg <= 50) return 'MEDIUM';
+    if (avg <= 75) return 'HIGH';
+    return 'CRITICAL';
+  }
+
   const filtered = projects
-    .filter(p => filter === 'ALL' || p.complexityLevel === filter)
+    .filter(p => filter === 'ALL' || complexityLevel(p) === filter)
     .sort((a, b) => {
-      if (sortBy === 'name')       return (a.name || '').localeCompare(b.name || '');
-      if (sortBy === 'complexity') return (b.complexityScore ?? 0) - (a.complexityScore ?? 0);
+      if (sortBy === 'name') return (a.name || '').localeCompare(b.name || '');
+      if (sortBy === 'complexity') {
+        const scoreA = (a.files ?? []).reduce((s, f) => s + (f.complexityScore || 0), 0) / Math.max((a.files ?? []).length, 1);
+        const scoreB = (b.files ?? []).reduce((s, f) => s + (f.complexityScore || 0), 0) / Math.max((b.files ?? []).length, 1);
+        return scoreB - scoreA;
+      }
       return new Date(b.createdAt ?? 0) - new Date(a.createdAt ?? 0);
     });
 
@@ -84,11 +112,11 @@ export default function Dashboard() {
     <div style={{ minHeight:'100vh', background:'var(--bg-base)', paddingTop:56 }}>
       <div style={{ padding:'32px' }}>
 
-        {/* ── Header ── */}
+        {/* Header */}
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', flexWrap:'wrap', gap:16, marginBottom:32, animation:'fadeIn 400ms ease' }}>
           <div>
             <p style={{ fontFamily:'var(--font-mono)', fontSize:12, color:'var(--text-muted)', letterSpacing:'0.1em', marginBottom:4 }}>
-              {greeting}, <span style={{ color:'var(--accent-primary)' }}>{user?.username ?? 'dev'}</span>
+              {greeting}, <span style={{ color:'var(--accent-primary)' }}>{user?.name || user?.username || 'dev'}</span>
             </p>
             <h1 style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:28, color:'var(--text-primary)', letterSpacing:'-0.02em' }}>
               Code Intelligence <span style={{ color:'var(--accent-primary)' }}>Dashboard</span>
@@ -112,10 +140,9 @@ export default function Dashboard() {
           </button>
         </div>
 
-        {/* ── Upload form ── */}
+        {/* Upload form */}
         {showForm && (
           <form onSubmit={handleCreate} style={{ background:'var(--bg-surface)', border:'1px solid var(--border-default)', borderRadius:'var(--radius-xl)', overflow:'hidden', marginBottom:28, animation:'fadeIn 250ms ease', boxShadow:'0 8px 32px rgba(0,0,0,0.3)' }}>
-            {/* Form header */}
             <div style={{ padding:'16px 22px', background:'var(--bg-elevated)', borderBottom:'1px solid var(--border-subtle)', display:'flex', alignItems:'center', gap:10 }}>
               <span style={{ fontSize:16 }}>⬆</span>
               <div>
@@ -125,13 +152,12 @@ export default function Dashboard() {
             </div>
 
             <div style={{ padding:22, display:'flex', flexDirection:'column', gap:14 }}>
-              {/* Name + Description */}
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
                 <FormField label="PROJECT NAME *" value={formName} onChange={e => setFormName(e.target.value)} placeholder="my-awesome-project" required />
                 <FormField label="DESCRIPTION"    value={formDesc} onChange={e => setFormDesc(e.target.value)} placeholder="Optional description" />
               </div>
 
-              {/* Drop zone — single ZIP file */}
+              {/* Drop zone */}
               <div>
                 <label style={labelStyle}>ZIP FILE *</label>
                 <div
@@ -150,32 +176,20 @@ export default function Dashboard() {
                   {file ? (
                     <>
                       <p style={{ fontFamily:'var(--font-mono)', fontSize:13, color:'var(--accent-green)', fontWeight:600, marginBottom:4 }}>{file.name}</p>
-                      <p style={{ fontFamily:'var(--font-mono)', fontSize:11, color:'var(--text-muted)' }}>
-                        {(file.size / 1024).toFixed(1)} KB · Click to change
-                      </p>
+                      <p style={{ fontFamily:'var(--font-mono)', fontSize:11, color:'var(--text-muted)' }}>{(file.size / 1024).toFixed(1)} KB · Click to change</p>
                     </>
                   ) : (
                     <>
-                      <p style={{ fontFamily:'var(--font-mono)', fontSize:13, color: dragOver ? 'var(--accent-primary)' : 'var(--text-secondary)' }}>
-                        Drop your ZIP file here or click to browse
-                      </p>
-                      <p style={{ fontFamily:'var(--font-mono)', fontSize:11, color:'var(--text-muted)', marginTop:4 }}>
-                        Accepts .zip files of your project
-                      </p>
+                      <p style={{ fontFamily:'var(--font-mono)', fontSize:13, color: dragOver ? 'var(--accent-primary)' : 'var(--text-secondary)' }}>Drop your ZIP here or click to browse</p>
+                      <p style={{ fontFamily:'var(--font-mono)', fontSize:11, color:'var(--text-muted)', marginTop:4 }}>Accepts .zip files</p>
                     </>
                   )}
                 </div>
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept=".zip,application/zip"
-                  style={{ display:'none' }}
-                  onChange={e => setFile(e.target.files[0] || null)}
-                />
+                <input ref={fileRef} type="file" accept=".zip,application/zip" style={{ display:'none' }} onChange={e => setFile(e.target.files[0] || null)} />
               </div>
 
               {uploadErr && (
-                <div style={{ padding:'10px 14px', borderRadius:'var(--radius-md)', background:'rgba(255,123,114,0.08)', border:'1px solid rgba(255,123,114,0.2)', fontFamily:'var(--font-mono)', fontSize:12, color:'var(--accent-red)', display:'flex', gap:8, alignItems:'center' }}>
+                <div style={{ padding:'10px 14px', borderRadius:'var(--radius-md)', background:'rgba(255,123,114,0.08)', border:'1px solid rgba(255,123,114,0.2)', fontFamily:'var(--font-mono)', fontSize:12, color:'var(--accent-red)', display:'flex', gap:8 }}>
                   ⚠ {uploadErr}
                 </div>
               )}
@@ -184,7 +198,7 @@ export default function Dashboard() {
                 <button type="button" onClick={() => setShowForm(false)} style={{ padding:'9px 18px', borderRadius:'var(--radius-md)', background:'none', border:'1px solid var(--border-default)', color:'var(--text-secondary)', fontFamily:'var(--font-mono)', fontSize:12, cursor:'pointer' }}>
                   Cancel
                 </button>
-                <button type="submit" disabled={uploading} style={{ padding:'9px 22px', borderRadius:'var(--radius-md)', border:'none', background: uploading ? 'var(--bg-overlay)' : 'var(--accent-primary)', color: uploading ? 'var(--text-muted)' : '#000', fontFamily:'var(--font-mono)', fontWeight:700, fontSize:12, cursor: uploading ? 'not-allowed' : 'pointer', display:'flex', alignItems:'center', gap:8, transition:'all var(--transition-fast)' }}>
+                <button type="submit" disabled={uploading} style={{ padding:'9px 22px', borderRadius:'var(--radius-md)', border:'none', background: uploading ? 'var(--bg-overlay)' : 'var(--accent-primary)', color: uploading ? 'var(--text-muted)' : '#000', fontFamily:'var(--font-mono)', fontWeight:700, fontSize:12, cursor: uploading ? 'not-allowed' : 'pointer', display:'flex', alignItems:'center', gap:8 }}>
                   {uploading ? <><Spinner /> Uploading…</> : '⚡ Upload & Analyze'}
                 </button>
               </div>
@@ -192,7 +206,7 @@ export default function Dashboard() {
           </form>
         )}
 
-        {/* ── Filter bar ── */}
+        {/* Filter bar */}
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20, flexWrap:'wrap', gap:12 }}>
           <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
             {['ALL','LOW','MEDIUM','HIGH','CRITICAL'].map(f => (
@@ -218,11 +232,11 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* ── Project grid ── */}
+        {/* Grid */}
         {loading ? (
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(300px,1fr))', gap:16 }}>
             {[1,2,3].map(i => (
-              <div key={i} style={{ height:200, borderRadius:'var(--radius-lg)', background:'linear-gradient(90deg, var(--bg-elevated) 25%, var(--bg-overlay) 50%, var(--bg-elevated) 75%)', backgroundSize:'200% 100%', animation:'shimmer 1.5s infinite' }} />
+              <div key={i} style={{ height:220, borderRadius:'var(--radius-lg)', background:'linear-gradient(90deg, var(--bg-elevated) 25%, var(--bg-overlay) 50%, var(--bg-elevated) 75%)', backgroundSize:'200% 100%', animation:'shimmer 1.5s infinite' }} />
             ))}
           </div>
         ) : filtered.length === 0 ? (
@@ -256,8 +270,7 @@ function FormField({ label, value, onChange, placeholder, required }) {
   return (
     <div>
       <label style={labelStyle}>{label}</label>
-      <input
-        value={value} onChange={onChange} placeholder={placeholder} required={required}
+      <input value={value} onChange={onChange} placeholder={placeholder} required={required}
         style={{ width:'100%', padding:'10px 14px', fontFamily:'var(--font-mono)', fontSize:13, background:'var(--bg-elevated)', color:'var(--text-primary)', border:`1px solid ${focused ? 'var(--accent-primary)' : 'var(--border-default)'}`, borderRadius:'var(--radius-md)', outline:'none', transition:'border-color var(--transition-fast)' }}
         onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
       />
