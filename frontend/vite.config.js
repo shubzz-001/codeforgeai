@@ -6,12 +6,17 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
+      // Spring Boot backend — strips /api prefix
       '/api': {
         target: 'http://localhost:8080',
         changeOrigin: true,
-        // Backend has NO /api prefix — strip it before forwarding
-        // /api/projects/upload → /projects/upload
         rewrite: (path) => path.replace(/^\/api/, ''),
+      },
+      // Python FastAPI AI service
+      '/ai': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/ai/, ''),
       },
     },
   },
