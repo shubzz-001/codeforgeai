@@ -1,6 +1,6 @@
 import os
 import requests
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
@@ -16,138 +16,134 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Ollama runs locally on port 11434 by default
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-
-# Model to use — change this to any model you have pulled in Ollama
-# Recommended for code: codellama, llama3.2, mistral, deepseek-coder
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "codellama")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "mistral")  
 
 
 class CodeRequest(BaseModel):
     code: str
 
 
-def build_prompt(code: str) -> str:
-    return f"""You are a senior software engineer reviewing code.
+# Quick scan: called by Spring Boot during ZIP upload 
+# Returns immediately with basic stats so the upload never times out.
+# No Ollama call — just fast static analysis.
+def quick_scan(code: str) -> dict:
+    lines   = code.split("\n")
+    methods = sum(1 for l in lines if any(
+        kw in l for kw in ["public ", "private ", "protected ", "def ", "func "]
+    ) and "(" in l and ")" in l and not l.strip().startswith("//"))
+    classes = sum(1 for l in lines if
+        ("class " in l or "interface " in l) and "{" in l
+    )
+    return {
+        "summary":    f"Quick scan: {len(lines)} lines, ~{classes} class(es), ~{methods} method(s). Click 'Analyze with AI' for a full AI review.",
+        "issues":     [],
+        "suggestion": "Click the ⚡ Analyze with AI button in the file viewer to get a full Ollama-powered analysis.",
+        "model_used": "quick-scan",
+        "quick":      True,
+    }
 
-Analyze the following code and respond in exactly these three numbered sections:
+
+# Full Ollama analysis: called by the frontend "Analyze" button 
+def full_analysis(code: str) -> dict:
+    prompt = f"""Analyze this code as a senior engineer. Reply in exactly 3 sections:
 
 1. Code Structure Summary
-Describe the overall structure: classes, methods, fields and what the code does in 2-3 sentences.
+One paragraph: what it does, classes, methods.
 
 2. Issues and Code Smells
-List problems found: high complexity, long methods, bad naming, missing error handling, etc.
-- Use bullet points starting with -
-- If no issues found, write "No major issues found."
+Bullet points starting with - (or "- None found.")
 
 3. Refactoring Suggestions
-List concrete, actionable improvements.
-- Use bullet points starting with -
-- If code is already clean, write "Code looks clean."
+Bullet points starting with - (or "- Looks clean.")
 
-Code to analyze:
+Code:
 ```
-{code[:4000]}
-```
-
-Respond only with the three sections above. Be concise and specific."""
-
-
-@app.post("/analyze")
-def analyze_code(request: CodeRequest):
-    """
-    Sends code to a local Ollama model and returns structured analysis.
-    Make sure Ollama is running: `ollama serve`
-    Make sure the model is pulled: `ollama pull codellama`
-    """
-    prompt = build_prompt(request.code)
+{code[:2000]}
+```"""
 
     try:
-        # Use Ollama's OpenAI-compatible endpoint
         response = requests.post(
             f"{OLLAMA_BASE_URL}/api/chat",
             json={
-                "model":    OLLAMA_MODEL,
-                "messages": [{"role": "user", "content": prompt}],
-                "stream":   False,  # get the full response at once
+                "model":   OLLAMA_MODEL,
+                "messages":[{"role": "user", "content": prompt}],
+                "stream":  False,
+                "options": {
+                    "num_predict": 400,   # shorter = faster
+                    "temperature": 0.2,
+                    "num_ctx":     2048,  # smaller context = faster
+                },
             },
-            timeout=120,  # local models can take time on first run
+            timeout=120,
         )
 
         if response.status_code != 200:
-            raise HTTPException(
-                status_code=500,
-                detail=f"Ollama returned {response.status_code}: {response.text}"
-            )
+            raise HTTPException(status_code=500,
+                detail=f"Ollama returned {response.status_code}: {response.text}")
 
-        result = response.json()
+        result  = response.json()
         content = result.get("message", {}).get("content", "")
-
         if not content:
-            raise HTTPException(
-                status_code=500,
-                detail=f"Empty response from Ollama. Raw: {result}"
-            )
+            raise HTTPException(status_code=500,
+                detail=f"Empty Ollama response: {result}")
 
         print(f"✓ Ollama [{OLLAMA_MODEL}] responded ({len(content)} chars)")
-
         return {
             "summary":    content,
             "issues":     [],
             "suggestion": content,
             "model_used": OLLAMA_MODEL,
+            "quick":      False,
         }
 
     except requests.exceptions.ConnectionError:
-        raise HTTPException(
-            status_code=503,
-            detail=(
-                "Cannot connect to Ollama. Make sure it is running:\n"
-                "  1. Install Ollama: https://ollama.com/download\n"
-                f"  2. Start it: ollama serve\n"
-                f"  3. Pull the model: ollama pull {OLLAMA_MODEL}"
-            ),
-        )
+        raise HTTPException(status_code=503, detail=(
+            f"Cannot connect to Ollama at {OLLAMA_BASE_URL}. "
+            "Run: ollama serve"
+        ))
     except requests.exceptions.Timeout:
-        raise HTTPException(
-            status_code=504,
-            detail=f"Ollama timed out after 120s. Try a smaller model like 'mistral' or 'llama3.2'."
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=504, detail=(
+            f"Ollama timed out. Your current model is '{OLLAMA_MODEL}'. "
+            "Run: ollama pull mistral  then set OLLAMA_MODEL=mistral in .env"
+        ))
+
+
+# Main endpoint 
+@app.post("/analyze")
+def analyze_code(
+    request: CodeRequest,
+    quick: bool = Query(default=False,
+        description="true = fast static scan (used during upload), "
+                    "false = full Ollama AI analysis (used by frontend button)")
+):
+    """
+    Two modes:
+    - quick=true  → instant static scan, no Ollama. Used by Spring Boot during ZIP upload.
+    - quick=false → full Ollama analysis. Used by the frontend Analyze button.
+
+    Spring Boot should call: POST /analyze?quick=true
+    Frontend calls:          POST /analyze          (quick defaults to false)
+    """
+    if quick:
+        return quick_scan(request.code)
+    return full_analysis(request.code)
 
 
 @app.get("/health")
 def health():
-    """Check if Ollama is reachable and the model is available."""
     try:
-        r = requests.get(f"{OLLAMA_BASE_URL}/api/tags", timeout=5)
+        r      = requests.get(f"{OLLAMA_BASE_URL}/api/tags", timeout=5)
         models = [m["name"] for m in r.json().get("models", [])]
-        model_ready = any(OLLAMA_MODEL in m for m in models)
+        ready  = any(OLLAMA_MODEL in m for m in models)
         return {
-            "status":       "ok" if model_ready else "model_not_pulled",
+            "status":       "ok" if ready else "model_not_pulled",
             "ollama_url":   OLLAMA_BASE_URL,
             "model":        OLLAMA_MODEL,
-            "model_ready":  model_ready,
+            "model_ready":  ready,
             "pulled_models": models,
             "tip": f"Run 'ollama pull {OLLAMA_MODEL}' if model_ready is false",
         }
     except Exception as e:
-        return {
-            "status":     "ollama_offline",
-            "error":      str(e),
-            "tip":        "Run 'ollama serve' to start Ollama",
-        }
-
-
-@app.get("/models")
-def list_models():
-    """List all models currently pulled in Ollama."""
-    try:
-        r = requests.get(f"{OLLAMA_BASE_URL}/api/tags", timeout=5)
-        return {"models": [m["name"] for m in r.json().get("models", [])]}
-    except Exception as e:
-        raise HTTPException(status_code=503, detail=f"Ollama offline: {e}")
+        return {"status": "ollama_offline", "error": str(e),
+                "tip": "Run 'ollama serve'"}

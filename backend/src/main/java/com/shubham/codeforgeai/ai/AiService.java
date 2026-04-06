@@ -13,7 +13,7 @@ public class AiService {
 
     private final RestTemplate restTemplate;
 
-    private final String AI_URL = "http://localhost:8000/analyze";
+    private final String AI_URL = "http://localhost:8000/analyze?quick=true";
 
     public Map analyzeCode(String code) {
 

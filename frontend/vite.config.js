@@ -6,18 +6,14 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      // Spring Boot backend — strips /api prefix
-      '/api': {
-        target: 'http://localhost:8080',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, ''),
-      },
-      // Python FastAPI AI service
+      // Python AI service — frontend calls /ai/analyze, proxied to localhost:8000/analyze
       '/ai': {
         target: 'http://localhost:8000',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/ai/, ''),
       },
+      // Spring Boot is getting called directly via http://localhost:8080 in axios.js
+      // so no proxy needed for the backend
     },
   },
 })

@@ -3,10 +3,10 @@ import { useParams, useNavigate } from "react-router-dom";
 import api from "../api/axios";
 import Editor from "@monaco-editor/react";
 
-// AI service is proxied through Vite at /ai → http://localhost:8000
-const AI_BASE = "/ai";
+// Python AI service URL — call directly to avoid Vite proxy issues
+const AI_URL = import.meta.env.VITE_AI_URL || "http://localhost:8000";
 
-// ─── Parse the raw Mistral response into labelled sections ────────────────────
+// Parse the raw Mistral response into labelled sections 
 // The prompt asks for 3 numbered sections, so we split on them.
 function parseAIResponse(text) {
   if (!text) return { structure: '', issues: '', refactoring: '' };
@@ -27,7 +27,7 @@ function parseAIResponse(text) {
   };
 }
 
-// ─── Score → colour helper (matches CodeFile.complexityScore 0-100) ──────────
+// Score → colour helper (matches CodeFile.complexityScore 0-100) 
 function scoreColor(score) {
   if (!score) return 'var(--text-muted)';
   if (score <= 25) return 'var(--accent-green)';
@@ -36,7 +36,7 @@ function scoreColor(score) {
   return 'var(--accent-red)';
 }
 
-// ─── Main component ──────────────────────────────────────────────────────────
+// Main component 
 export default function ProjectDetails() {
   const { id }    = useParams();
   const navigate  = useNavigate();
@@ -50,7 +50,7 @@ export default function ProjectDetails() {
   const [analyzeError, setAnalyzeError] = useState('');
   const [search,       setSearch]       = useState('');
 
-  // ── Fetch file list ────────────────────────────────────────────────────────
+  // Fetch file list 
   useEffect(() => {
     api.get(`/projects/${id}/files`)
       .then(res => setFiles(Array.isArray(res.data) ? res.data : []))
@@ -58,7 +58,7 @@ export default function ProjectDetails() {
       .finally(() => setLoadingFiles(false));
   }, [id]);
 
-  // ── Load a file's content into Monaco ─────────────────────────────────────
+  // Load a file's content into Monaco 
   const loadFile = async (file) => {
     setSelectedFile(file);
     setAnalyzeError('');
@@ -77,32 +77,57 @@ export default function ProjectDetails() {
     }
   };
 
-  // ── Analyze: POST code to Python AI service → store result locally ─────────
+  // Analyze: POST code to Python AI service 
   const handleAnalyze = async () => {
-    if (!selectedFile || !code || code.startsWith('//')) return;
+    if (!selectedFile) return;
+
+    // Guard: need code loaded first
+    if (!code || code === '// No content available.' || code === '// Could not load file content.') {
+      setAnalyzeError('No source code loaded. Click a file first to load its content.');
+      return;
+    }
+
     setAnalyzing(true);
     setAnalyzeError('');
+
     try {
-      // Call Python FastAPI: POST /ai/analyze  →  { summary, issues, suggestion }
-      const res = await fetch(`${AI_BASE}/analyze`, {
+      // Call to Python FastAPI (Ollama) directly — no Vite proxy needed
+      const res = await fetch(`${AI_URL}/analyze`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ code }),
       });
-      if (!res.ok) throw new Error(`AI service returned ${res.status}`);
-      const data = await res.json();
 
-      // data.summary  = full Mistral response (sections 1-3)
-      // data.suggestion = same (your current main.py returns both as the full text)
+      let data;
+      try { data = await res.json(); } catch { data = null; }
+
+      if (!res.ok) {
+        const detail = data?.detail || data?.message || `AI service error (${res.status})`;
+        throw new Error(detail);
+      }
+
+      const content = data?.summary || data?.suggestion || '';
+      if (!content) throw new Error('AI service returned an empty response.');
+
       const updated = {
         ...selectedFile,
-        aiSummary:    data.summary    || data.suggestion || '',
-        aiSuggestion: data.suggestion || data.summary    || '',
+        aiSummary:    content,
+        aiSuggestion: content,
       };
       setSelectedFile(updated);
       setFiles(prev => prev.map(f => f.id === updated.id ? updated : f));
+
     } catch (err) {
-      setAnalyzeError(err?.message || 'AI analysis failed. Is the Python service running?');
+      // Network error means Ollama / Python service is not running
+      const msg = err?.message || 'Unknown error';
+      if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('ECONNREFUSED')) {
+        setAnalyzeError(
+          `Cannot reach AI service at ${AI_URL}. ` +
+          `Make sure Python service is running: uvicorn main:app --reload --port 8000`
+        );
+      } else {
+        setAnalyzeError(msg);
+      }
     } finally {
       setAnalyzing(false);
     }
@@ -375,7 +400,7 @@ export default function ProjectDetails() {
   );
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+// Sub-components 
 
 function MetaPill({ label, value, color = 'var(--accent-cyan)' }) {
   return (

@@ -13,7 +13,6 @@ export default function Login() {
 
   // Reactively navigate when user state becomes truthy.
   // This is the correct pattern for React 19 + React Router v7:
-  // don't call navigate() immediately after setState — watch the state instead.
   useEffect(() => {
     if (user) {
       navigate('/dashboard', { replace: true });

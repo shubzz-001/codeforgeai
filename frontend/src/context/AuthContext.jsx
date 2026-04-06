@@ -4,13 +4,7 @@ import api from '../api/axios';
 const AuthContext = createContext(null);
 
 function parseToken(data) {
-  return (
-    data?.token       ||
-    data?.accessToken ||
-    data?.access_token ||
-    data?.jwt         ||
-    null
-  );
+  return data?.token || data?.accessToken || data?.access_token || data?.jwt || null;
 }
 
 function parseUser(data) {
@@ -25,13 +19,20 @@ function parseUser(data) {
   };
 }
 
-const savedToken = localStorage.getItem('codeforge_token');
+// Read saved token — but do a basic sanity check so obviously
+// corrupted/empty values don't count as "has token"
+const rawToken   = localStorage.getItem('codeforge_token');
+const savedToken = rawToken && rawToken.length > 10 ? rawToken : null;
+
+// If the stored value was garbage, clean it up immediately
+if (rawToken && !savedToken) {
+  localStorage.removeItem('codeforge_token');
+}
 
 export function AuthProvider({ children }) {
-  const [user,             setUser]             = useState(null);
-  const [loading,          setLoading]          = useState(!!savedToken);
-  // null = not attempted, 'success' = registered OK but no token (must login)
-  const [registerSuccess,  setRegisterSuccess]  = useState(null);
+  const [user,            setUser]            = useState(null);
+  const [loading,         setLoading]         = useState(!!savedToken);
+  const [registerSuccess, setRegisterSuccess] = useState(null);
   const initialized = useRef(false);
 
   useEffect(() => {
@@ -39,10 +40,18 @@ export function AuthProvider({ children }) {
     initialized.current = true;
     if (!savedToken) return;
 
+    // Validate saved token against the backend
     api.defaults.headers.common['Authorization'] = `Bearer ${savedToken}`;
     api.get('/auth/profile')
-      .then(res => setUser(parseUser(res.data)))
-      .catch(() => {
+      .then(res => {
+        const u = parseUser(res.data);
+        if (u) setUser(u);
+      })
+      .catch((err) => {
+        // Profile check failed (expired token etc.) — clear everything.
+        // The axios interceptor already clears localStorage + redirects for
+        // 401/403, but we also clear here defensively.
+        console.warn('[Auth] Profile check failed, clearing session:', err?.message);
         localStorage.removeItem('codeforge_token');
         delete api.defaults.headers.common['Authorization'];
       })
@@ -50,14 +59,16 @@ export function AuthProvider({ children }) {
   }, []);
 
   async function login(email, password) {
+    // Login endpoint is excluded from the 401/403 redirect in axios interceptor
     const res   = await api.post('/auth/login', { email, password });
     const token = parseToken(res.data);
     if (!token) throw new Error('Server did not return a token.');
     localStorage.setItem('codeforge_token', token);
+    // Set header explicitly so immediate next requests have it
     api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-    const resolvedUser = parseUser(res.data) || { email, name: email, username: email };
-    setUser(resolvedUser);
-    return resolvedUser;
+    const u = parseUser(res.data) || { email, name: email, username: email };
+    setUser(u);
+    return u;
   }
 
   async function register(name, email, password) {
@@ -65,20 +76,17 @@ export function AuthProvider({ children }) {
     const token = parseToken(res.data);
 
     if (token) {
-      // Backend returned a token — log the user in directly
+      // Backend auto-logs in — set everything up
       localStorage.setItem('codeforge_token', token);
       api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      const resolvedUser = parseUser(res.data) || { name, username: name, email };
-      setUser(resolvedUser);
+      const u = parseUser(res.data) || { name, username: name, email };
+      setUser(u);
       return { autoLogin: true };
-    } else {
-      // Backend returned only a success message — user must log in manually
-      // (common Spring Security pattern: register → 200 OK, then login separately)
-      setRegisterSuccess(
-        res.data?.message || 'Account created! Please sign in.'
-      );
-      return { autoLogin: false };
     }
+
+    // Backend registered but didn't return token — must log in manually
+    setRegisterSuccess(res.data?.message || 'Account created! Please sign in.');
+    return { autoLogin: false };
   }
 
   function logout() {
